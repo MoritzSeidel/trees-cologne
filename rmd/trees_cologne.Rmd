@@ -1,0 +1,514 @@
+---
+title: "Trees of Cologne - Bäume in Köln"
+author: "Moritz Seidel"
+output: 
+  html_document:
+    highlight: espresso
+    theme: readable
+---
+## Why?
+Having discovered that the City of Cologne has published a dataset with a lot of informations on the trees in the city (not all of them but many - to be precise: exactly 134.189 trees) I wanted to know wether I can make visible some interessting things with this data:
+
+1. Where in the city can I find especially old trees?
+2. Can I make visible some of the city's climate adaption politics with this data? Actually the city of Cologne started experimenting with non-domestic trees ten years ago. The aim is to find trees that show for example a higher resistance to heat waves which occure more often due to climate change or are more comfortable with the increasing average temperature.
+
+Additionally the city plans to complete this dataset until all of the trees are in there. So maybe over time this analysis can get more precise.
+
+```{r setup, message=F, echo=F}
+#install.packages("ggplot2")
+library(ggplot2)
+#install.packages("tidyverse")
+library(tidyverse)
+#install.packages("sf")
+library(sf)
+```
+
+## The data
+The dataset can be found here: https://offenedaten-koeln.de/sites/default/files/Bestand_Einzelbaeume_Koeln_0.csv. I will combine it with some shape files to create maps later on.
+
+```{r importing data, include=F}
+# You can import the csv directly from the website or get it from the raw_data folder:
+#url <- "https://offenedaten-koeln.de/sites/default/files/Bestand_Einzelbaeume_Koeln_0.csv"
+#datatrees <- read_csv2(url)
+path="~/Desktop/R/trees_cologne/raw_data/Bestand_Einzelbaeume.csv"
+dirname(path)
+datatrees <- read_csv2(path)
+# Next: The same data - but this time as shape file:
+path2="~/Desktop/R/trees_cologne/raw_data/shapes_trees_cologne/Bestand_Einzelbaeume.shp"
+dirname(path2)
+trees <- st_read(path2)
+# Finaly: Shape files for the City of Cologne
+path3="~/Desktop/R/trees_cologne/raw_data/shapes_quarters_cologne/Stadtteil.shp"
+dirname(path3)
+cologne <- st_read(path3)
+```
+
+## A first look at the tree's ages 
+After having cleaned up the data a little, I created a new variable "Heimisch", which tells me for each species if it is domestic or not.
+
+```{r cleaning for plotting, echo=F}
+datatrees_narrow <- datatrees %>% 
+  select(AlterSchätzung, DeutscherN) %>%
+  filter(!is.na(DeutscherN)) %>%
+  filter(DeutscherN!="unbekannt") %>%
+  filter(DeutscherN!="Verschiedene") %>% 
+  filter(AlterSchätzung!=0)
+```
+
+```{r domestic or not for plotting}
+datatrees_domestic <- datatrees_narrow %>% 
+  mutate(Heimisch=case_when(
+    DeutscherN=="Ahorn" ~ "Heimisch",
+    DeutscherN=="Amberbaum" ~ "Andere",
+    DeutscherN=="Amerikanische Linde" ~ "Andere",
+    DeutscherN=="Amerikanische Rot-Eiche" ~ "Andere",
+    DeutscherN=="Amerikanische Stadt-Linde" ~ "Andere",
+    DeutscherN=="Amerikanischer Tulpenbaum" ~ "Andere",
+    DeutscherN=="Apfel" ~ "Heimisch",
+    DeutscherN=="Atlas-Zeder" ~ "Andere",
+    DeutscherN=="Baumhasel" ~ "Andere",
+    DeutscherN=="Berg-Ulme" ~ "Heimisch",
+    DeutscherN=="Bergahorn" ~ "Heimisch",
+    DeutscherN=="Birke" ~ "Heimisch",
+    DeutscherN=="Birne" ~ "Heimisch",
+    DeutscherN=="Blasenbaum" ~ "Andere",
+    DeutscherN=="Blauglockenbaum" ~ "Andere",
+    DeutscherN=="Blumen-Esch" ~ "Andere",
+    DeutscherN=="Blut-Ahorn, Spitzahorn" ~ "Heimisch",
+    DeutscherN=="Blut-Pflaume" ~ "Heimisch",
+    DeutscherN=="Chinesische Ulme" ~ "Andere",
+    DeutscherN=="Coloradotanne" ~ "Andere",
+    DeutscherN=="Crataegus, Dorn" ~ "Heimisch",
+    DeutscherN=="Dreidorniger Lederhülsenbaum, Gleditschie" ~ "Andere",
+    DeutscherN=="Eberesche, Mehlbeere, Vogelbeerbaum" ~ "Heimisch",
+    DeutscherN=="Echter Korkbaum, Amur-Korkbaum" ~ "Andere",
+    DeutscherN=="Echter Rotdorn" ~ "Heimisch",
+    DeutscherN=="Eibe" ~ "Heimisch",
+    DeutscherN=="Eiche" ~ "Heimisch",
+    DeutscherN=="Einblättrige Esche" ~ "Andere",
+    DeutscherN=="Eisenbaum" ~ "Andere",
+    DeutscherN=="Eisenholzbaum" ~ "Andere",
+    DeutscherN=="Erle" ~ "Heimisch",
+    DeutscherN=="Esche" ~ "Heimisch",
+    DeutscherN=="Eschen-Ahorn" ~ "Andere",
+    DeutscherN=="Etagen Hartriegel" ~ "Andere",
+    DeutscherN=="Fächer-Ahorn" ~ "Andere",
+    DeutscherN=="Farn- oder geschlitzblättrige Birke" ~ "Andere",
+    DeutscherN=="Feldahorn" ~ "Heimisch",
+    DeutscherN=="Felsenbirne" ~ "Heimisch",
+    DeutscherN=="Feuerahorn" ~ "Andere",
+    DeutscherN=="Fichte" ~ "Heimisch",
+    DeutscherN=="Flügelnuß" ~ "Heimisch",
+    DeutscherN=="Gelbe Gleditschie" ~ "Andere",
+    DeutscherN=="Gemeine Esche" ~ "Heimisch",
+    DeutscherN=="Gemeiner Goldregen" ~ "Andere",
+    DeutscherN=="Gemeiner Judasbaum, Herzbaum" ~ "Andere",
+    DeutscherN=="Gewöhnliche Eberesche" ~ "Heimisch",
+    DeutscherN=="Gewöhnliche Kiefer" ~ "Heimisch",
+    DeutscherN=="Ginkgo" ~ "Andere",
+    DeutscherN=="Ginkgobaum, Fächerblattbaum" ~ "Andere",
+    DeutscherN=="Gleditsie, Lederhülsenbaum" ~ "Andere",
+    DeutscherN=="Goldrobinie" ~ "Andere",
+    DeutscherN=="Götterbaum" ~ "Andere",
+    DeutscherN=="Großblättrige Sommerlinde" ~ "Heimisch",
+    DeutscherN=="Grüne Hängebuche" ~ "Heimisch",
+    DeutscherN=="Hainbuche, Weißbuche" ~ "Heimisch",
+    DeutscherN=="Hasel" ~ "Heimisch",
+    DeutscherN=="Holzbirne, Gemeine Birne" ~ "Heimisch",
+    DeutscherN=="Hopfenbuche" ~ "Andere",
+    DeutscherN=="Italienische Erle" ~ "Andere",
+    DeutscherN=="Japanische Nelken-Kirsche" ~ "Andere",
+    DeutscherN=="Japanischer Schnurbaum" ~ "Andere",
+    DeutscherN=="Judasblattbaum, Lebkuchenbaum" ~ "Andere",
+    DeutscherN=="Kaiserlinde" ~ "Heimisch",
+    DeutscherN=="Kanadische Hemlocktanne" ~ "Andere",
+    DeutscherN=="Kanadische Holz-Pappel" ~ "Andere",
+    DeutscherN=="Kastanie" ~ "Heimisch",
+    DeutscherN=="Kegel-Robinie" ~ "Andere",
+    DeutscherN=="Kiefer" ~ "Heimisch",
+    DeutscherN=="Kirsche" ~ "Heimisch",
+    DeutscherN=="Kolchischer Ahorn" ~ "Andere",
+    DeutscherN=="Krimlinde" ~ "Heimisch",
+    DeutscherN=="Kugel-Trompetenbaum" ~ "Andere",
+    DeutscherN=="Kugelahorn" ~ "Heimisch",
+    DeutscherN=="Kugelrobinie" ~ "Andere",
+    DeutscherN=="Kupfer-Felsenbirne" ~ "Andere",
+    DeutscherN=="Küstenmammutbaum" ~ "Andere",
+    DeutscherN=="Lebensbaum" ~ "Andere",
+    DeutscherN=="Lederblättriger Weißdorn" ~ "Andere",
+    DeutscherN=="Libanon-Zeder" ~ "Andere",
+    DeutscherN=="Linde" ~ "Heimisch",
+    DeutscherN=="Lorbeermispel, Glanzmispel" ~ "Andere",
+    DeutscherN=="Magnolie" ~ "Andere",
+    DeutscherN=="Mammutbaum" ~ "Andere",
+    DeutscherN=="Marone, Eßkastanie" ~ "Andere",
+    DeutscherN=="Mehlbeere" ~ "Heimisch",
+    DeutscherN=="Österreichische Schwarzkiefer" ~ "Andere",
+    DeutscherN=="Papierbirke" ~ "Andere",
+    DeutscherN=="Pappel" ~ "Heimisch",
+    DeutscherN=="Pfaffenhütchen (Spindelbaum" ~ "Heimisch",
+    DeutscherN=="Platane" ~ "Heimisch",
+    DeutscherN=="Purpur-Kastanie, Blut-Kastanie" ~ "Heimisch",
+    DeutscherN=="Pyramiden-Eiche, Säulen-Eiche" ~ "Heimisch",
+    DeutscherN=="Pyramiden-Hainbuche" ~ "Heimisch",
+    DeutscherN=="Roßkastanie" ~ "Heimisch",
+    DeutscherN=="Rot-Buche" ~ "Heimisch",
+    DeutscherN=="Rotahorn" ~ "Andere",
+    DeutscherN=="Roter Holunder" ~ "Heimisch",
+    DeutscherN=="Rundblättrige Rotbuche" ~ "Heimisch",
+    DeutscherN=="Sal-Weide" ~ "Heimisch",
+    DeutscherN=="Sandbirke" ~ "Heimisch",
+    DeutscherN=="Sanddorn" ~ "Heimisch",
+    DeutscherN=="Säulen-Tulpenbaum" ~ "Andere",
+    DeutscherN=="Säulen-Ulme" ~ "Heimisch",
+    DeutscherN=="Säulenpappel, Pyramidenpappel" ~ "Heimisch",
+    DeutscherN=="Säulenrobinie" ~ "Andere",
+    DeutscherN=="Scheinakazie" ~ "Andere",
+    DeutscherN=="Scheinzypresse" ~ "Andere",
+    DeutscherN=="Schmalkroniger Rotahorn" ~ "Andere",
+    DeutscherN=="Schnurbaum" ~ "Andere",
+    DeutscherN=="Schwarz-Erle, Rot-Erle" ~ "Heimisch",
+    DeutscherN=="Schwarzer Holunder" ~ "Heimisch",
+    DeutscherN=="Schwarzkiefer" ~ "Andere",
+    DeutscherN=="Schwarznuß" ~ "Andere",
+    DeutscherN=="Schwarzpappel" ~ "Heimisch",
+    DeutscherN=="Schwedische Mehlbeere" ~ "Andere",
+    DeutscherN=="Silber-Ahorn" ~ "Andere",
+    DeutscherN=="Silber-Weide" ~ "Heimisch",
+    DeutscherN=="Silberlinde" ~ "Andere",
+    DeutscherN=="Silberpappel" ~ "Heimisch",
+    DeutscherN=="Sommer-Eiche, Stieleiche" ~ "Heimisch",
+    DeutscherN=="Späte Traubenkirsche" ~ "Andere",
+    DeutscherN=="Späth's Erle" ~ "Heimisch",
+    DeutscherN=="Spitzahorn" ~ "Heimisch",
+    DeutscherN=="Spitzahorn Cleveland" ~ "Andere",
+    DeutscherN=="Stechpalme" ~ "Heimisch",
+    DeutscherN=="Straßen-Akazie" ~ "Andere",
+    DeutscherN=="Sumpf-Eiche" ~ "Andere",
+    DeutscherN=="Tanne" ~ "Heimisch",
+    DeutscherN=="Trauben-Kirsche" ~ "Heimisch",
+    DeutscherN=="Trompetenbaum" ~ "Andere",
+    DeutscherN=="Tulpenbaum" ~ "Andere",
+    DeutscherN=="Ulme, Rüster" ~ "Heimisch",
+    DeutscherN=="Ungarische Eiche" ~ "Andere",
+    DeutscherN=="Ungarische Silberlinde" ~ "Andere",
+    DeutscherN=="Urweltmammutbaum, Chinesisches Rotholz" ~ "Andere",
+    DeutscherN=="Wacholder" ~ "Heimisch",
+    DeutscherN=="Wal-, Nußbaum" ~ "Heimisch",
+    DeutscherN=="Walnuß" ~ "Heimisch",
+    DeutscherN=="Weide" ~ "Heimisch",
+    DeutscherN=="Weißdorn" ~ "Heimisch",
+    DeutscherN=="Winter-Eiche, Trauben-Eiche" ~ "Heimisch",
+    DeutscherN=="Winterlinde" ~ "Heimisch",
+    DeutscherN=="Winterlinde Cordaley" ~ "Heimisch",
+    DeutscherN=="Winterlinde Dila" ~ "Heimisch",
+    DeutscherN=="Zeder" ~ "Andere",
+    DeutscherN=="Zelkove" ~ "Andere",
+    DeutscherN=="Zier-Birne" ~ "Heimisch",
+    DeutscherN=="Zierapfel" ~ "Heimisch",
+    DeutscherN=="Zierkirsche 'Spire'" ~ "Heimisch"
+  )) %>% 
+  filter(!is.na(Heimisch))
+```
+
+Then I did the same thing again with the spatial data.
+
+```{r cleaning for mapping, echo=F}
+trees_small <- trees %>%
+  select(AlterSchae, DeutscherN, geometry) %>%
+  filter(!is.na(DeutscherN)) %>%
+  filter(DeutscherN!="unbekannt") %>%
+  filter(DeutscherN!="Verschiedene") %>% 
+  filter(AlterSchae!=0)
+```
+
+```{r domestic or not for mapping, echo=F}
+trees_domestic <- trees_small %>% 
+  mutate(Heimisch=case_when(
+    DeutscherN=="Ahorn" ~ "Heimisch",
+    DeutscherN=="Amberbaum" ~ "Andere",
+    DeutscherN=="Amerikanische Linde" ~ "Andere",
+    DeutscherN=="Amerikanische Rot-Eiche" ~ "Andere",
+    DeutscherN=="Amerikanische Stadt-Linde" ~ "Andere",
+    DeutscherN=="Amerikanischer Tulpenbaum" ~ "Andere",
+    DeutscherN=="Apfel" ~ "Heimisch",
+    DeutscherN=="Atlas-Zeder" ~ "Andere",
+    DeutscherN=="Baumhasel" ~ "Andere",
+    DeutscherN=="Berg-Ulme" ~ "Heimisch",
+    DeutscherN=="Bergahorn" ~ "Heimisch",
+    DeutscherN=="Birke" ~ "Heimisch",
+    DeutscherN=="Birne" ~ "Heimisch",
+    DeutscherN=="Blasenbaum" ~ "Andere",
+    DeutscherN=="Blauglockenbaum" ~ "Andere",
+    DeutscherN=="Blumen-Esch" ~ "Andere",
+    DeutscherN=="Blut-Ahorn, Spitzahorn" ~ "Heimisch",
+    DeutscherN=="Blut-Pflaume" ~ "Heimisch",
+    DeutscherN=="Chinesische Ulme" ~ "Andere",
+    DeutscherN=="Coloradotanne" ~ "Andere",
+    DeutscherN=="Crataegus, Dorn" ~ "Heimisch",
+    DeutscherN=="Dreidorniger Lederhülsenbaum, Gleditschie" ~ "Andere",
+    DeutscherN=="Eberesche, Mehlbeere, Vogelbeerbaum" ~ "Heimisch",
+    DeutscherN=="Echter Korkbaum, Amur-Korkbaum" ~ "Andere",
+    DeutscherN=="Echter Rotdorn" ~ "Heimisch",
+    DeutscherN=="Eibe" ~ "Heimisch",
+    DeutscherN=="Eiche" ~ "Heimisch",
+    DeutscherN=="Einblättrige Esche" ~ "Andere",
+    DeutscherN=="Eisenbaum" ~ "Andere",
+    DeutscherN=="Eisenholzbaum" ~ "Andere",
+    DeutscherN=="Erle" ~ "Heimisch",
+    DeutscherN=="Esche" ~ "Heimisch",
+    DeutscherN=="Eschen-Ahorn" ~ "Andere",
+    DeutscherN=="Etagen Hartriegel" ~ "Andere",
+    DeutscherN=="Fächer-Ahorn" ~ "Andere",
+    DeutscherN=="Farn- oder geschlitzblättrige Birke" ~ "Andere",
+    DeutscherN=="Feldahorn" ~ "Heimisch",
+    DeutscherN=="Felsenbirne" ~ "Heimisch",
+    DeutscherN=="Feuerahorn" ~ "Andere",
+    DeutscherN=="Fichte" ~ "Heimisch",
+    DeutscherN=="Flügelnuß" ~ "Heimisch",
+    DeutscherN=="Gelbe Gleditschie" ~ "Andere",
+    DeutscherN=="Gemeine Esche" ~ "Heimisch",
+    DeutscherN=="Gemeiner Goldregen" ~ "Andere",
+    DeutscherN=="Gemeiner Judasbaum, Herzbaum" ~ "Andere",
+    DeutscherN=="Gewöhnliche Eberesche" ~ "Heimisch",
+    DeutscherN=="Gewöhnliche Kiefer" ~ "Heimisch",
+    DeutscherN=="Ginkgo" ~ "Andere",
+    DeutscherN=="Ginkgobaum, Fächerblattbaum" ~ "Andere",
+    DeutscherN=="Gleditsie, Lederhülsenbaum" ~ "Andere",
+    DeutscherN=="Goldrobinie" ~ "Andere",
+    DeutscherN=="Götterbaum" ~ "Andere",
+    DeutscherN=="Großblättrige Sommerlinde" ~ "Heimisch",
+    DeutscherN=="Grüne Hängebuche" ~ "Heimisch",
+    DeutscherN=="Hainbuche, Weißbuche" ~ "Heimisch",
+    DeutscherN=="Hasel" ~ "Heimisch",
+    DeutscherN=="Holzbirne, Gemeine Birne" ~ "Heimisch",
+    DeutscherN=="Hopfenbuche" ~ "Andere",
+    DeutscherN=="Italienische Erle" ~ "Andere",
+    DeutscherN=="Japanische Nelken-Kirsche" ~ "Andere",
+    DeutscherN=="Japanischer Schnurbaum" ~ "Andere",
+    DeutscherN=="Judasblattbaum, Lebkuchenbaum" ~ "Andere",
+    DeutscherN=="Kaiserlinde" ~ "Heimisch",
+    DeutscherN=="Kanadische Hemlocktanne" ~ "Andere",
+    DeutscherN=="Kanadische Holz-Pappel" ~ "Andere",
+    DeutscherN=="Kastanie" ~ "Heimisch",
+    DeutscherN=="Kegel-Robinie" ~ "Andere",
+    DeutscherN=="Kiefer" ~ "Heimisch",
+    DeutscherN=="Kirsche" ~ "Heimisch",
+    DeutscherN=="Kolchischer Ahorn" ~ "Andere",
+    DeutscherN=="Krimlinde" ~ "Heimisch",
+    DeutscherN=="Kugel-Trompetenbaum" ~ "Andere",
+    DeutscherN=="Kugelahorn" ~ "Heimisch",
+    DeutscherN=="Kugelrobinie" ~ "Andere",
+    DeutscherN=="Kupfer-Felsenbirne" ~ "Andere",
+    DeutscherN=="Küstenmammutbaum" ~ "Andere",
+    DeutscherN=="Lebensbaum" ~ "Andere",
+    DeutscherN=="Lederblättriger Weißdorn" ~ "Andere",
+    DeutscherN=="Libanon-Zeder" ~ "Andere",
+    DeutscherN=="Linde" ~ "Heimisch",
+    DeutscherN=="Lorbeermispel, Glanzmispel" ~ "Andere",
+    DeutscherN=="Magnolie" ~ "Andere",
+    DeutscherN=="Mammutbaum" ~ "Andere",
+    DeutscherN=="Marone, Eßkastanie" ~ "Andere",
+    DeutscherN=="Mehlbeere" ~ "Heimisch",
+    DeutscherN=="Österreichische Schwarzkiefer" ~ "Andere",
+    DeutscherN=="Papierbirke" ~ "Andere",
+    DeutscherN=="Pappel" ~ "Heimisch",
+    DeutscherN=="Pfaffenhütchen (Spindelbaum" ~ "Heimisch",
+    DeutscherN=="Platane" ~ "Heimisch",
+    DeutscherN=="Purpur-Kastanie, Blut-Kastanie" ~ "Heimisch",
+    DeutscherN=="Pyramiden-Eiche, Säulen-Eiche" ~ "Heimisch",
+    DeutscherN=="Pyramiden-Hainbuche" ~ "Heimisch",
+    DeutscherN=="Roßkastanie" ~ "Heimisch",
+    DeutscherN=="Rot-Buche" ~ "Heimisch",
+    DeutscherN=="Rotahorn" ~ "Andere",
+    DeutscherN=="Roter Holunder" ~ "Heimisch",
+    DeutscherN=="Rundblättrige Rotbuche" ~ "Heimisch",
+    DeutscherN=="Sal-Weide" ~ "Heimisch",
+    DeutscherN=="Sandbirke" ~ "Heimisch",
+    DeutscherN=="Sanddorn" ~ "Heimisch",
+    DeutscherN=="Säulen-Tulpenbaum" ~ "Andere",
+    DeutscherN=="Säulen-Ulme" ~ "Heimisch",
+    DeutscherN=="Säulenpappel, Pyramidenpappel" ~ "Heimisch",
+    DeutscherN=="Säulenrobinie" ~ "Andere",
+    DeutscherN=="Scheinakazie" ~ "Andere",
+    DeutscherN=="Scheinzypresse" ~ "Andere",
+    DeutscherN=="Schmalkroniger Rotahorn" ~ "Andere",
+    DeutscherN=="Schnurbaum" ~ "Andere",
+    DeutscherN=="Schwarz-Erle, Rot-Erle" ~ "Heimisch",
+    DeutscherN=="Schwarzer Holunder" ~ "Heimisch",
+    DeutscherN=="Schwarzkiefer" ~ "Andere",
+    DeutscherN=="Schwarznuß" ~ "Andere",
+    DeutscherN=="Schwarzpappel" ~ "Heimisch",
+    DeutscherN=="Schwedische Mehlbeere" ~ "Andere",
+    DeutscherN=="Silber-Ahorn" ~ "Andere",
+    DeutscherN=="Silber-Weide" ~ "Heimisch",
+    DeutscherN=="Silberlinde" ~ "Andere",
+    DeutscherN=="Silberpappel" ~ "Heimisch",
+    DeutscherN=="Sommer-Eiche, Stieleiche" ~ "Heimisch",
+    DeutscherN=="Späte Traubenkirsche" ~ "Andere",
+    DeutscherN=="Späth's Erle" ~ "Heimisch",
+    DeutscherN=="Spitzahorn" ~ "Heimisch",
+    DeutscherN=="Spitzahorn Cleveland" ~ "Andere",
+    DeutscherN=="Stechpalme" ~ "Heimisch",
+    DeutscherN=="Straßen-Akazie" ~ "Andere",
+    DeutscherN=="Sumpf-Eiche" ~ "Andere",
+    DeutscherN=="Tanne" ~ "Heimisch",
+    DeutscherN=="Trauben-Kirsche" ~ "Heimisch",
+    DeutscherN=="Trompetenbaum" ~ "Andere",
+    DeutscherN=="Tulpenbaum" ~ "Andere",
+    DeutscherN=="Ulme, Rüster" ~ "Heimisch",
+    DeutscherN=="Ungarische Eiche" ~ "Andere",
+    DeutscherN=="Ungarische Silberlinde" ~ "Andere",
+    DeutscherN=="Urweltmammutbaum, Chinesisches Rotholz" ~ "Andere",
+    DeutscherN=="Wacholder" ~ "Heimisch",
+    DeutscherN=="Wal-, Nußbaum" ~ "Heimisch",
+    DeutscherN=="Walnuß" ~ "Heimisch",
+    DeutscherN=="Weide" ~ "Heimisch",
+    DeutscherN=="Weißdorn" ~ "Heimisch",
+    DeutscherN=="Winter-Eiche, Trauben-Eiche" ~ "Heimisch",
+    DeutscherN=="Winterlinde" ~ "Heimisch",
+    DeutscherN=="Winterlinde Cordaley" ~ "Heimisch",
+    DeutscherN=="Winterlinde Dila" ~ "Heimisch",
+    DeutscherN=="Zeder" ~ "Andere",
+    DeutscherN=="Zelkove" ~ "Andere",
+    DeutscherN=="Zier-Birne" ~ "Heimisch",
+    DeutscherN=="Zierapfel" ~ "Heimisch",
+    DeutscherN=="Zierkirsche 'Spire'" ~ "Heimisch"
+  )) %>% 
+  filter(!is.na(Heimisch))
+```
+
+I also had to join the shape files of the trees dataset with shape files making me able to display the City of Cologne and its quarters.
+
+```{r joining}
+trees_joined <- trees_domestic %>%
+  st_transform(crs=st_crs(cologne))
+cologne_trees <- st_join(cologne, trees_joined, left=T)
+```
+
+## A first insight
+Having done all the preparations I wanted to have an overview of the age distribution of domestic and non domestic trees. The following barchart helps:
+
+```{r grouping for plotting, echo=F}
+datatrees_grouped <- datatrees_domestic %>% 
+  group_by(AlterSchätzung, Heimisch) %>% 
+  mutate(Anzahl=n())
+```
+
+```{r plotting, echo=F, }
+datatrees_grouped %>% 
+  ggplot(aes(x=AlterSchätzung, fill=Heimisch)) +
+  geom_bar() +
+  coord_flip() +
+  labs(x="Alter",
+       y="Menge",
+       title="Heimische und nicht heimische Bäume in Köln",
+       subtitle="nach geschätztem Alter",
+       caption= "Quelle: Stadt Köln",
+       fill="Herkunft")
+```
+
+So domestic trees are clearly dominating the age groups - also for the past 10 years. But maybe I can discover something interessting by having a look at geographical distribution.
+
+## Mapping
+At first I simply looked at the average age of the trees per city quarter:
+
+```{r grouping for map 1, echo=F}
+# Warning: If you want to copy this: This takes a long time to compute!
+cologne_trees_quarter <- cologne_trees %>% 
+  group_by(STT_NAME) %>% 
+  summarize(Durchschnitt_Alter=sum(AlterSchae)/n())
+```
+
+```{r map 1, echo=F}
+ggplot(cologne_trees_quarter) +
+  geom_sf(aes(fill=Durchschnitt_Alter)) + 
+  labs(title = "Wo die alten Bäume stehen",
+       subtitle = "Durchschnittliches Alter der Bäume in Kölns Stadtvierteln April 2017",
+       caption = "Quelle: Stadt Köln", 
+       fill = "Durchschnittliches Alter") +
+  scale_fill_distiller(trans="reverse", palette="Greens") +
+  theme_void() +
+  theme(panel.grid.major=element_line(colour="transparent")) +
+  coord_sf()
+```
+
+Not that revealing. So I tried with a map showing the average age of the trees per city quarter but faceted by species:
+
+```{r grouping for map 2, echo=F}
+# Warning: If you want to copy this: This takes a long time to compute!
+cologne_trees_quarter_species <- cologne_trees %>%
+  group_by(STT_NAME, DeutscherN) %>%
+  summarize(Durchschnitt_Alter=sum(AlterSchae)/n())
+```
+
+```{r map 2, echo=F}
+# Warning: If you want to copy this: This takes a long time to compute!
+ggplot(cologne_trees_quarter_species) +
+  geom_sf(aes(fill=Durchschnitt_Alter), color=NA) + 
+  facet_wrap(~DeutscherN, ncol=4) +
+  labs(title = "Wo die alten Bäume stehen - sortiert nach Baumart",
+       subtitle = "Durchschnittliches Alter der Bäume in Kölns Stadtvierteln April 2017",
+       caption = "Quelle: Stadt Köln", 
+       fill = "Durchschnittliches Alter") +
+  scale_fill_distiller(trans="reverse", palette="Greens") +
+  theme_void() +
+  theme(panel.grid.major=element_line(colour="transparent")) +
+  coord_sf()
+```
+
+Interesting but not a good overview. So I used my variable "Heimisch" again to facet only by domestic or not:
+
+```{r grouping for map 3, echo=F}
+# Warning: If you want to copy this: This takes a long time to compute!
+cologne_trees_quarter_domestic <- cologne_trees%>%
+  group_by(STT_NAME, Heimisch) %>%
+  summarize(Durchschnitt_Alter=sum(AlterSchae)/n())
+```
+
+```{r map 3, echo=F}
+cologne_trees_quarter_domestic %>% 
+  filter(!is.na(Heimisch)) %>%
+  ggplot() +
+  geom_sf(aes(fill=Durchschnitt_Alter)) +
+  facet_wrap(~Heimisch) +
+  labs(title = "Heimische und nicht heimische Bäume in Köln",
+       subtitle = "Durchschnittliches Alter in den Stadtteilen April 2017",
+       caption = "Quelle: Stadt Köln", 
+       fill = "Durchschnittliches Alter") +
+  scale_fill_distiller(trans="reverse", palette="Greens") +
+  theme_void() +
+  theme(panel.grid.major=element_line(colour="transparent")) +
+  coord_sf()
+```
+
+Good overview - but still not revealing. Last try: The same map - but only with the trees that are ten years old or younger:
+
+```{r grouping for map 4, echo=F}
+cologne_trees_quarter_domestic_10 <- cologne_trees%>%
+  filter(AlterSchae<=10) %>% 
+  group_by(STT_NAME, Heimisch) %>%
+  summarize(Durchschnitt_Alter=sum(AlterSchae)/n())
+```
+
+```{r map 4, echo=F}
+cologne_trees_quarter_domestic_10 %>% 
+  filter(!is.na(Heimisch)) %>%
+  ggplot() +
+  geom_sf(aes(fill=Durchschnitt_Alter)) +
+  facet_wrap(~Heimisch) +
+  labs(title = "Heimische und nicht heimische Bäume unter 10 Jahren in Köln",
+       subtitle = "Durchschnittliches Alter in den Stadtteilen April 2017",
+       caption = "Quelle: Stadt Köln", 
+       fill = "Durchschnittliches Alter") +
+  scale_fill_distiller(trans="reverse", palette="Greens") +
+  theme_void() +
+  theme(panel.grid.major=element_line(colour="transparent")) +
+  coord_sf()
+```
+
+Again: I cannot see that the climate change politics allready took effects for now. Maybe it would be more revealing to simply have a look at the number of domestic and non-domestic trees per quarter. I will try to add this soon.
+
+Other ideas for this dataset that I will try to look at soon are:
+  - Where in Cologne can we find especially big trees?
+  - Where in Cologne can we still find trees that have allready been there during WWII - this could be interessting as the city has been largely destroied during the war.
